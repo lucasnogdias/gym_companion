@@ -1,0 +1,76 @@
+name: Link PR to Issues
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  issues: read
+  pull-requests: write
+
+jobs:
+  link-issues:
+    name: Auto-link matching issues
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request;
+            const branch = pullRequest.head.ref;
+            const title = pullRequest.title;
+
+            const prefixes = new Set();
+            const collectPrefixes = (text) => {
+              for (const match of text.matchAll(/\b(TASK|BUG)-(\d{4})\b/gi)) {
+                prefixes.add(`${match[1].toUpperCase()}-${match[2]}`);
+              }
+            };
+
+            collectPrefixes(branch);
+            collectPrefixes(title);
+
+            if (prefixes.size === 0) {
+              core.info("No TASK-NNNN or BUG-NNNN prefix found in the PR title or branch.");
+              return;
+            }
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const matchingIssues = issues.filter(
+              (issue) =>
+                !issue.pull_request &&
+                [...prefixes].some((prefix) =>
+                  issue.title.toUpperCase().startsWith(prefix)
+                )
+            );
+
+            if (matchingIssues.length === 0) {
+              core.info(`No open issues matched: ${[...prefixes].join(", ")}.`);
+              return;
+            }
+
+            const body = pullRequest.body || "";
+            const existingLinks = new Set(
+              [...body.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi)]
+                .map((match) => Number(match[1]))
+            );
+            const newLinks = matchingIssues
+              .filter((issue) => !existingLinks.has(issue.number))
+              .map((issue) => `Closes #${issue.number}`);
+
+            if (newLinks.length === 0) {
+              core.info("Matching issues are already linked.");
+              return;
+            }
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pullRequest.number,
+              body: `${body.trim()}\n\n${newLinks.join("\n")}`,
+            });
