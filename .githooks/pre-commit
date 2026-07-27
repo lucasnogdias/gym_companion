@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+BRANCH=$(git branch --show-current)
+PATTERN='^((task|bug)-[0-9]{4}(-[a-z0-9]+)*|chore(-[a-z0-9]+)*)$'
+
+if ! [[ "$BRANCH" =~ $PATTERN ]]; then
+  echo "Error: branch must be task-NNNN[-description], bug-NNNN[-description], or chore[-description]." >&2
+  echo "Got: \"$BRANCH\"" >&2
+  exit 1
+fi

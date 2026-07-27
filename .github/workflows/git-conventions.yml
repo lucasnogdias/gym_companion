@@ -1,0 +1,38 @@
+name: Validate Git conventions
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate branch and commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate branch name
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if ! [[ "$BRANCH" =~ ^((task|bug)-[0-9]{4}(-[a-z0-9]+)*|chore(-[a-z0-9]+)*)$ ]]; then
+            echo "Branch must be task-NNNN[-description], bug-NNNN[-description], or chore[-description]." >&2
+            exit 1
+          fi
+
+      - name: Validate commit messages
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE_BRANCH"
+          invalid_messages=$(git log --format='%s' "origin/$BASE_BRANCH..HEAD" | grep -Ev '^((TASK|BUG)-[0-9]{4}|CHORE): .+' || true)
+          if [[ -n "$invalid_messages" ]]; then
+            echo "Every commit must start with TASK-NNNN:, BUG-NNNN:, or CHORE:." >&2
+            echo "$invalid_messages" >&2
+            exit 1
+          fi

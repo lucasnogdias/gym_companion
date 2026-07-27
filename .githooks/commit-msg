@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+COMMIT_MSG_FILE="$1"
+FIRST_LINE=$(head -n 1 "$COMMIT_MSG_FILE")
+PATTERN='^((TASK|BUG)-[0-9]{4}|CHORE): .+'
+
+if ! [[ "$FIRST_LINE" =~ $PATTERN ]]; then
+  echo "Error: commit message must start with 'TASK-NNNN: ', 'BUG-NNNN: ', or 'CHORE: '." >&2
+  echo "Got: \"$FIRST_LINE\"" >&2
+  exit 1
+fi
